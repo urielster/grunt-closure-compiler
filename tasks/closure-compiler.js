@@ -3,9 +3,9 @@ module.exports = function(grunt) {
   'use strict';
 
   var exec = require('child_process').exec,
-      fs = require('fs'),
-      path = require('path'),
-      gzip = require('zlib').gzip;
+    fs = require('fs'),
+    path = require('path'),
+    gzip = require('zlib').gzip;
 
   // ==========================================================================
   // TASKS
@@ -14,105 +14,127 @@ module.exports = function(grunt) {
   grunt.registerMultiTask('closure-compiler', 'Minify JS files using Closure Compiler.', function() {
 
     var closurePath = '',
-        reportFile = '',
-        data = this.data,
-        done = this.async();
+      reportFile = '',
+      data = this.data,
+      done = this.async();
 
+    //console.log(data.closurePath);
     // Check for closure path.
-    if (data.closurePath) {
+    if(data.closurePath) {
       closurePath = data.closurePath;
-    } else if (process.env.CLOSURE_PATH) {
+    } else if(process.env.CLOSURE_PATH) {
       closurePath = process.env.CLOSURE_PATH;
     } else {
       grunt.log.error('' +
-          '/!\\'.red +
-          ' Set an environment variable called ' +
-          'CLOSURE_PATH'.red + ' or the build parameter' + 'closurePath'.red +
-          ' and\nmake it point to your root install of Closure Compiler.' +
-          '\n');
+        '/!\\'.red +
+        ' Set an environment variable called ' +
+        'CLOSURE_PATH'.red + ' or the build parameter' + 'closurePath'.red +
+        ' and\nmake it point to your root install of Closure Compiler.' +
+        '\n');
       return false;
     }
 
-    var command = 'java -jar ' + closurePath + '/build/compiler.jar';
+    var command = 'java -jar "' + closurePath + '/compiler.jar"';
 
     data.cwd = data.cwd || './';
+    if(data.modules) {
+      //data.modules = grunt.file.expand(data.modules);
+      for(var i = 0; i < data.modules.length; i++) {
+        var js = grunt.file.expand({cwd: data.cwd}, data.modules[i].js)
 
-    data.js = grunt.file.expand({cwd: data.cwd}, data.js);
+        command += ' --module ' + data.modules[i].jsOutputFile + ":" + js.length;
+        var realPath = data.options.module_output_path_prefix + data.modules[i].jsOutputFile + ".js";
+        if(!grunt.file.exists(realPath)) {
+          grunt.file.write(realPath, "");
+        }
+        if(data.modules[i].dependence) {
+          command += ":" + data.modules[i].dependence;
+        }
+        command += ' --js ' + js.join(' --js ');
 
-    // Sanitize options passed.
-    if (!data.js.length) {
-      // This task requires a minima an input file.
-      grunt.warn('Missing js property.');
-      return false;
-    }
-
-    // Build command line.
-    command += ' --js ' + data.js.join(' --js ');
-
-    if (data.jsOutputFile) {
-      if (!grunt.file.isPathAbsolute(data.jsOutputFile)) {
-        data.jsOutputFile = path.resolve('./') + '/' + data.jsOutputFile;
       }
-      command += ' --js_output_file ' + data.jsOutputFile;
-      reportFile = data.reportFile || data.jsOutputFile + '.report.txt';
-    }
+    } else {
 
-    if (data.externs) {
+      data.js = grunt.file.expand({cwd: data.cwd}, data.js);
+
+      // Sanitize options passed.
+      if(!data.js.length) {
+        // This task requires a minima an input file.
+        grunt.warn('Missing js property.');
+        return false;
+      }
+
+      // Build command line.
+      command += ' --js "' + data.js.join('" --js "') + '"';
+
+      if(data.jsOutputFile) {
+        if(!grunt.file.isPathAbsolute(data.jsOutputFile)) {
+          data.jsOutputFile = path.resolve('./') + '/' + data.jsOutputFile;
+          grunt.file.write(data.jsOutputFile, '');
+
+        }
+        command += ' --js_output_file "' + data.jsOutputFile + '"';
+        reportFile = data.reportFile || data.jsOutputFile + '.report.txt';
+      }
+    }
+    if(data.externs) {
       data.externs = grunt.file.expand(data.externs);
       command += ' --externs ' + data.externs.join(' --externs ');
 
-      if (!data.externs.length) {
+      if(!data.externs.length) {
         delete data.externs;
       }
     }
 
-    if (data.options.externs) {
+    if(data.options.externs) {
       data.options.externs = grunt.file.expand(data.options.externs);
 
-      if (!data.options.externs.length) {
+      if(!data.options.externs.length) {
         delete data.options.externs;
       }
     }
 
-    for (var directive in data.options) {
-      if (Array.isArray(data.options[directive])) {
+    for(var directive in data.options) {
+      if(Array.isArray(data.options[directive])) {
         command += ' --' + directive + ' ' + data.options[directive].join(' --' + directive + ' ');
-      } else if (data.options[directive] === undefined || data.options[directive] === null) {
+      } else if(data.options[directive] === undefined || data.options[directive] === null) {
         command += ' --' + directive;
       } else {
         command += ' --' + directive + ' "' + String(data.options[directive]) + '"';
       }
     }
-
     // because closure compiler does not create dirs.
-    grunt.file.write(data.jsOutputFile, '');
+    //grunt.file.write(data.jsOutputFile, '');
+
+    grunt.verbose.writeln(command);
 
     // Minify WebGraph class.
     exec(command, { maxBuffer: data.maxBuffer * 1024, cwd: data.cwd }, function(err, stdout, stderr) {
-      if (err) {
+      if(err) {
         grunt.warn(err);
         done(false);
       }
 
-      if (stdout) {
+      if(stdout) {
         grunt.log.writeln(stdout);
       }
 
       // If OK, calculate gzipped file size.
-      if (reportFile.length) {
+      if(reportFile.length) {
         var min = fs.readFileSync(data.jsOutputFile, 'utf8');
         min_info(min, function(err) {
-          if (err) {
+          if(err) {
             grunt.warn(err);
             done(false);
           }
 
-          if (data.noreport) {
+          if(true) {
             done();
           } else {
             // Write compile report to a file.
-            fs.writeFile(reportFile, stderr, function(err) {
-              if (err) {
+            fs.writeFile(reportFile, stderr,
+              function(err) {
+              if(err) {
                 grunt.warn(err);
                 done(false);
               }
@@ -124,7 +146,7 @@ module.exports = function(grunt) {
 
         });
       } else {
-        if (data.report) {
+        if(data.report) {
           grunt.log.error(stderr);
         }
         done();
@@ -137,7 +159,7 @@ module.exports = function(grunt) {
   // Output some size info about a file.
   function min_info(min, onComplete) {
     gzip(min, function(err, buffer) {
-      if (err) {
+      if(err) {
         onComplete.call(this, err);
       }
 
